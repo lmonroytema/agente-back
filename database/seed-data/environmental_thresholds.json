@@ -1,0 +1,42 @@
+{
+    "nota_legal": "VALORES REFERENCIALES. Estos umbrales son aproximaciones tipicas de la normativa ambiental peruana y NO sustituyen la consulta de la norma vigente. Antes de usarlos en un informe oficial, valide cada valor contra el Decreto Supremo (DS) aplicable y su ultima modificatoria. La aplicacion no garantiza que estos valores esten actualizados.",
+    "version": "referencial-2024-06",
+    "categorias": {
+        "agua": {
+            "descripcion": "Estandares de Calidad Ambiental (ECA) para Agua - valores referenciales. Ver DS N 004-2017-MINAM y normas sectoriales.",
+            "fuente": "Referencial - basado en ECA Agua (DS 004-2017-MINAM) y LMP de efluentes. VALIDAR CONTRA NORMA VIGENTE.",
+            "parametros": {
+                "ph": {"min": 6.5, "max": 8.5, "unidad": "unidad de pH", "tipo": "rango"},
+                "dbo5": {"max": 15, "unidad": "mg/L", "tipo": "maximo"},
+                "dqo": {"max": 40, "unidad": "mg/L", "tipo": "maximo"},
+                "aceites_y_grasas": {"max": 5, "unidad": "mg/L", "tipo": "maximo"},
+                "coliformes_termotolerantes": {"max": 1000, "unidad": "NMP/100mL", "tipo": "maximo"},
+                "plomo": {"max": 0.05, "unidad": "mg/L", "tipo": "maximo"},
+                "arsenico": {"max": 0.01, "unidad": "mg/L", "tipo": "maximo"},
+                "cadmio": {"max": 0.005, "unidad": "mg/L", "tipo": "maximo"},
+                "mercurio": {"max": 0.001, "unidad": "mg/L", "tipo": "maximo"},
+                "oxigeno_disuelto": {"min": 5, "unidad": "mg/L", "tipo": "minimo"}
+            }
+        },
+        "aire": {
+            "descripcion": "Estandares de Calidad Ambiental (ECA) para Aire - valores referenciales. Ver DS N 003-2017-MINAM.",
+            "fuente": "Referencial - basado en ECA Aire (DS 003-2017-MINAM). VALIDAR CONTRA NORMA VIGENTE.",
+            "parametros": {
+                "pm10": {"max": 100, "unidad": "ug/m3", "tipo": "maximo", "periodo": "24 horas"},
+                "pm2.5": {"max": 50, "unidad": "ug/m3", "tipo": "maximo", "periodo": "24 horas"},
+                "so2": {"max": 250, "unidad": "ug/m3", "tipo": "maximo", "periodo": "24 horas"},
+                "no2": {"max": 200, "unidad": "ug/m3", "tipo": "maximo", "periodo": "1 hora"},
+                "co": {"max": 10000, "unidad": "ug/m3", "tipo": "maximo", "periodo": "8 horas"},
+                "o3": {"max": 100, "unidad": "ug/m3", "tipo": "maximo", "periodo": "8 horas"}
+            }
+        },
+        "ruido": {
+            "descripcion": "Estandares de Calidad Ambiental (ECA) para Ruido - valores referenciales (zona industrial/comercial). Ver DS N 085-2003-PCM.",
+            "fuente": "Referencial - basado en ECA Ruido (DS 085-2003-PCM), zona industrial. VALIDAR CONTRA NORMA VIGENTE Y ZONIFICACION.",
+            "parametros": {
+                "ruido_diurno": {"max": 80, "unidad": "dB(A)", "tipo": "maximo", "periodo": "diurno"},
+                "ruido_nocturno": {"max": 70, "unidad": "dB(A)", "tipo": "maximo", "periodo": "nocturno"}
+            }
+        }
+    }
+}

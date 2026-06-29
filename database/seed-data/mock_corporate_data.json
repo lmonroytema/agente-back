@@ -1,0 +1,65 @@
+{
+  "clients": [
+    {
+      "id": "cli-001",
+      "name": "Minera Santa Aurora",
+      "sector": "mineria",
+      "country": "Peru",
+      "status": "activo"
+    },
+    {
+      "id": "cli-002",
+      "name": "Industriales del Pacifico",
+      "sector": "industrial",
+      "country": "Peru",
+      "status": "activo"
+    },
+    {
+      "id": "cli-003",
+      "name": "Aguas del Sur",
+      "sector": "agua",
+      "country": "Chile",
+      "status": "prospecto"
+    }
+  ],
+  "services": [
+    {
+      "id": "srv-001",
+      "name": "Remediacion ambiental",
+      "category": "mineria",
+      "status": "activo"
+    },
+    {
+      "id": "srv-002",
+      "name": "Gestion integral de residuos",
+      "category": "industrial",
+      "status": "activo"
+    },
+    {
+      "id": "srv-003",
+      "name": "Monitoreo y muestreo de agua",
+      "category": "agua",
+      "status": "activo"
+    }
+  ],
+  "projects": [
+    {
+      "id": "prj-001",
+      "name": "Remediacion de pasivo minero norte",
+      "type": "remediacion",
+      "status": "activo"
+    },
+    {
+      "id": "prj-002",
+      "name": "Programa de trazabilidad de residuos industriales",
+      "type": "residuos",
+      "status": "activo"
+    },
+    {
+      "id": "prj-003",
+      "name": "Campana de muestreo de agua subterranea",
+      "type": "agua",
+      "status": "planificado"
+    }
+  ]
+}

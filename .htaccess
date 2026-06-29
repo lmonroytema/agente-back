@@ -1,0 +1,44 @@
+Options -Indexes
+DirectoryIndex index.php index.html
+
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+    RewriteRule ^\.well-known/ - [L]
+
+    RewriteCond %{HTTP_HOST} !^gm\.temalitoclean\.com$ [NC,OR]
+    RewriteCond %{HTTPS} !=on
+    RewriteRule ^ https://gm.temalitoclean.com%{REQUEST_URI} [L,R=301,NE]
+
+    RewriteRule ^favicon\.ico$ public/favicon.ico [L,NC]
+    RewriteRule ^robots\.txt$ public/robots.txt [L,NC]
+
+    RewriteRule ^(?:app|bootstrap|config|database|resources|routes|storage|tests|vendor|public)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:artisan|composer\.(?:json|lock)|package(?:-lock)?\.json|phpunit\.xml|vite\.config\.(?:js|ts)|server\.php)$ - [F,L,NC]
+    RewriteRule ^(?:\.env.*|\.git.*|\.editorconfig|\.gitattributes|\.gitignore)$ - [F,L,NC]
+
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    RewriteRule ^ index.php [L,QSA]
+</IfModule>
+
+<FilesMatch "(^\.|composer\.(json|lock)$|package(-lock)?\.json$|phpunit\.xml|vite\.config\.(js|ts)$)">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Deny from all
+    </IfModule>
+</FilesMatch>
