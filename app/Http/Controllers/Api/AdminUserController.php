@@ -7,6 +7,7 @@ use App\Models\AdminUser;
 use App\Services\AppSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
@@ -34,6 +35,8 @@ class AdminUserController extends Controller
         $user = AdminUser::query()->create([
             'name' => $payload['name'],
             'email' => $email,
+            'password_hash' => $payload['password_hash'],
+            'password_changed_at' => $payload['password_changed_at'],
             'role' => $payload['role'],
             'active' => $payload['active'],
             'two_factor_enabled' => $payload['two_factor_enabled'],
@@ -73,6 +76,11 @@ class AdminUserController extends Controller
 
         foreach ($newAttributes as $field => $value) {
             $user->{$field} = $value;
+        }
+
+        if ($payload['password_hash'] !== null) {
+            $user->password_hash = $payload['password_hash'];
+            $user->password_changed_at = $payload['password_changed_at'];
         }
 
         $user->save();
@@ -115,6 +123,7 @@ class AdminUserController extends Controller
                 Rule::unique('admin_users', 'email'),
             ],
             'role' => ['required', Rule::in(['analista', 'operaciones', 'auditoria', 'admin'])],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
             'active' => ['sometimes', 'boolean'],
             'two_factor_enabled' => ['sometimes', 'boolean'],
         ]);
@@ -122,6 +131,8 @@ class AdminUserController extends Controller
         return [
             'name' => trim((string) $validated['name']),
             'email' => Str::lower(trim((string) $validated['email'])),
+            'password_hash' => Hash::make((string) $validated['password']),
+            'password_changed_at' => now(),
             'role' => Str::lower(trim((string) $validated['role'])),
             'active' => array_key_exists('active', $validated) ? (bool) $validated['active'] : true,
             'two_factor_enabled' => array_key_exists('two_factor_enabled', $validated)
@@ -142,6 +153,7 @@ class AdminUserController extends Controller
                 Rule::unique('admin_users', 'email')->ignore($user->id),
             ],
             'role' => ['sometimes', 'required', Rule::in(['analista', 'operaciones', 'auditoria', 'admin'])],
+            'password' => ['sometimes', 'nullable', 'string', 'min:8', 'confirmed'],
             'active' => ['sometimes', 'boolean'],
             'two_factor_enabled' => ['sometimes', 'boolean'],
         ]);
@@ -150,6 +162,8 @@ class AdminUserController extends Controller
             return [
                 'name' => $user->name,
                 'email' => $user->email,
+                'password_hash' => null,
+                'password_changed_at' => null,
                 'role' => $user->role,
                 'active' => (bool) $user->active,
                 'two_factor_enabled' => (bool) $user->two_factor_enabled,
@@ -159,6 +173,8 @@ class AdminUserController extends Controller
         return [
             'name' => array_key_exists('name', $validated) ? trim((string) $validated['name']) : $user->name,
             'email' => array_key_exists('email', $validated) ? Str::lower(trim((string) $validated['email'])) : $user->email,
+            'password_hash' => filled($validated['password'] ?? null) ? Hash::make((string) $validated['password']) : null,
+            'password_changed_at' => filled($validated['password'] ?? null) ? now() : null,
             'role' => array_key_exists('role', $validated) ? Str::lower(trim((string) $validated['role'])) : $user->role,
             'active' => array_key_exists('active', $validated) ? (bool) $validated['active'] : (bool) $user->active,
             'two_factor_enabled' => array_key_exists('two_factor_enabled', $validated)
@@ -192,6 +208,8 @@ class AdminUserController extends Controller
             'role' => $user->role,
             'active' => (bool) $user->active,
             'two_factor_enabled' => (bool) $user->two_factor_enabled,
+            'password_set' => filled($user->password_hash),
+            'password_changed_at' => optional($user->password_changed_at)?->toIso8601String(),
             'created_at' => optional($user->created_at)?->toIso8601String(),
             'updated_at' => optional($user->updated_at)?->toIso8601String(),
         ];

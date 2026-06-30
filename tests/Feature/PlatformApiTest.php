@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Mail\PasswordResetLinkMail;
 use App\Mail\TwoFactorCodeMail;
+use App\Models\AdminUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -99,6 +102,57 @@ class PlatformApiTest extends TestCase
         ]);
     }
 
+    public function test_password_can_be_reset_via_secure_email_link(): void
+    {
+        Mail::fake();
+
+        $this->postJson('/api/auth/forgot-password', [
+            'email' => 'admin@tema.com.pe',
+        ])->assertOk()->assertJson([
+            'success' => true,
+        ]);
+
+        $resetUrl = null;
+        Mail::assertSent(PasswordResetLinkMail::class, function (PasswordResetLinkMail $mail) use (&$resetUrl) {
+            $resetUrl = $mail->resetUrl;
+
+            return $mail->hasTo('admin@tema.com.pe');
+        });
+
+        $this->assertNotEmpty($resetUrl);
+        $query = [];
+        parse_str((string) parse_url((string) $resetUrl, PHP_URL_QUERY), $query);
+
+        $this->assertNotEmpty($query['reset_id'] ?? null);
+        $this->assertNotEmpty($query['token'] ?? null);
+
+        $this->postJson('/api/auth/reset-password', [
+            'reset_id' => $query['reset_id'],
+            'token' => $query['token'],
+            'password' => 'ClaveNueva789',
+            'password_confirmation' => 'ClaveNueva789',
+        ])->assertOk()->assertJson([
+            'success' => true,
+        ]);
+
+        $user = AdminUser::query()->where('email', 'admin@tema.com.pe')->firstOrFail();
+        $this->assertTrue(Hash::check('ClaveNueva789', (string) $user->password_hash));
+        $this->assertNotNull($user->password_changed_at);
+
+        $this->postJson('/api/auth/login', [
+            'email' => 'admin@tema.com.pe',
+            'password' => 'Tema1234',
+        ])->assertStatus(401);
+
+        $this->postJson('/api/auth/login', [
+            'email' => 'admin@tema.com.pe',
+            'password' => 'ClaveNueva789',
+        ])->assertOk()->assertJson([
+            'success' => true,
+            'requires_two_factor' => true,
+        ]);
+    }
+
     public function test_admin_users_and_settings_can_be_managed(): void
     {
         $users = $this->getJson('/api/admin/users')
@@ -111,6 +165,8 @@ class PlatformApiTest extends TestCase
             'name' => 'Analista QA',
             'email' => 'qa@tema.com.pe',
             'role' => 'analista',
+            'password' => 'Temporal123',
+            'password_confirmation' => 'Temporal123',
             'active' => true,
             'two_factor_enabled' => true,
         ])->assertOk();
@@ -120,9 +176,13 @@ class PlatformApiTest extends TestCase
             'role' => 'analista',
             'active' => true,
             'two_factor_enabled' => true,
+            'password_set' => true,
         ]);
 
         $userId = $created->json('id');
+        $createdUser = AdminUser::query()->findOrFail($userId);
+        $this->assertTrue(Hash::check('Temporal123', (string) $createdUser->password_hash));
+        $this->assertNotNull($createdUser->password_changed_at);
 
         $this->patchJson("/api/admin/users/{$userId}", [
             'name' => 'Auditor QA',
@@ -130,6 +190,8 @@ class PlatformApiTest extends TestCase
             'active' => false,
             'two_factor_enabled' => false,
             'role' => 'auditoria',
+            'password' => 'NuevaClave456',
+            'password_confirmation' => 'NuevaClave456',
         ])->assertOk()->assertJson([
             'id' => $userId,
             'name' => 'Auditor QA',
@@ -137,7 +199,12 @@ class PlatformApiTest extends TestCase
             'active' => false,
             'two_factor_enabled' => false,
             'role' => 'auditoria',
+            'password_set' => true,
         ]);
+
+        $updatedUser = AdminUser::query()->findOrFail($userId);
+        $this->assertTrue(Hash::check('NuevaClave456', (string) $updatedUser->password_hash));
+        $this->assertNotNull($updatedUser->password_changed_at);
 
         $this->deleteJson("/api/admin/users/{$userId}")
             ->assertOk()

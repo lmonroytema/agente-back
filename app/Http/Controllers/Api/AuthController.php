@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminUser;
+use App\Models\PasswordResetChallenge;
 use App\Services\AppSettingsService;
+use App\Services\PasswordResetService;
 use App\Services\TwoFactorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -40,8 +43,8 @@ class AuthController extends Controller
             return response()->json(['detail' => 'Ingresa un correo válido.'], 400);
         }
 
-        if (mb_strlen($password) < 6) {
-            return response()->json(['detail' => 'Ingresa una contraseña válida.'], 400);
+        if (mb_strlen($password) < 8) {
+            return response()->json(['detail' => 'Ingresa una contraseña válida de al menos 8 caracteres.'], 400);
         }
 
         if ($settings['require_corporate_email'] && ! $this->isAllowedCorporateEmail($email, $settings['allowed_domains'])) {
@@ -55,6 +58,10 @@ class AuthController extends Controller
 
         if (! $user->active) {
             return response()->json(['detail' => 'El usuario corporativo está inactivo.'], 403);
+        }
+
+        if (! filled($user->password_hash) || ! Hash::check($password, (string) $user->password_hash)) {
+            return response()->json(['detail' => 'Las credenciales ingresadas no son válidas.'], 401);
         }
 
         $userName = filled($user->name) ? $user->name : $this->buildUserName($email);
@@ -90,6 +97,89 @@ class AuthController extends Controller
             'session_token' => Str::random(48),
             'is_admin' => $user->role === 'admin',
             'requires_two_factor' => false,
+        ]);
+    }
+
+    public function forgotPassword(Request $request, AppSettingsService $appSettings, PasswordResetService $passwordReset): JsonResponse
+    {
+        $settings = $appSettings->toPayload($appSettings->ensureDefaults());
+        $email = Str::lower(trim((string) $request->input('email', '')));
+
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return response()->json(['detail' => 'Ingresa un correo válido.'], 400);
+        }
+
+        if ($settings['require_corporate_email'] && ! $this->isAllowedCorporateEmail($email, $settings['allowed_domains'])) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Si el correo está habilitado, enviaremos un enlace seguro para restablecer la contraseña.',
+            ]);
+        }
+
+        $user = AdminUser::query()->where('email', $email)->first();
+        if (! $user || ! $user->active) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Si el correo está habilitado, enviaremos un enlace seguro para restablecer la contraseña.',
+            ]);
+        }
+
+        $userName = filled($user->name) ? $user->name : $this->buildUserName($email);
+
+        try {
+            $passwordReset->issueChallenge($user, $userName);
+        } catch (RuntimeException $exception) {
+            $status = str_contains($exception->getMessage(), 'Espera ') ? 429 : 502;
+
+            return response()->json(['detail' => $exception->getMessage()], $status);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Si el correo está habilitado, enviaremos un enlace seguro para restablecer la contraseña.',
+        ]);
+    }
+
+    public function resetPassword(Request $request, PasswordResetService $passwordReset): JsonResponse
+    {
+        $validated = $request->validate([
+            'reset_id' => ['required', 'string'],
+            'token' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $verification = $passwordReset->verifyChallenge(
+            (string) $validated['reset_id'],
+            (string) $validated['token'],
+        );
+
+        if ($verification['status'] !== 'ok') {
+            return response()->json([
+                'detail' => 'El enlace de recuperación ya no es válido o expiró. Solicita uno nuevo.',
+            ], 404);
+        }
+
+        /** @var PasswordResetChallenge $challenge */
+        $challenge = $verification['challenge'];
+        $user = AdminUser::query()->where('email', $challenge->email)->first();
+
+        if (! $user || ! $user->active) {
+            $challenge->delete();
+
+            return response()->json([
+                'detail' => 'El enlace de recuperación ya no es válido o expiró. Solicita uno nuevo.',
+            ], 404);
+        }
+
+        $user->password_hash = Hash::make((string) $validated['password']);
+        $user->password_changed_at = now();
+        $user->save();
+
+        PasswordResetChallenge::query()->where('email', $challenge->email)->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'La contraseña fue actualizada correctamente. Ya puedes iniciar sesión con la nueva clave.',
         ]);
     }
 

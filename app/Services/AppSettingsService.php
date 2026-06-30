@@ -6,6 +6,7 @@ use App\Models\AdminUser;
 use App\Models\AppSetting;
 use App\Models\CorporateEndpoint;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class AppSettingsService
@@ -23,11 +24,7 @@ class AppSettingsService
             $setting->load('corporateEndpoints');
         }
 
-        if (AdminUser::query()->count() === 0) {
-            foreach ($this->defaultAdminUsers() as $user) {
-                AdminUser::query()->create($user);
-            }
-        }
+        $this->synchronizeDefaultAdminUsers();
 
         if ($this->synchronizeManagedPaths($setting)) {
             $setting->refresh();
@@ -337,6 +334,8 @@ class AppSettingsService
                 'id' => 'usr-admin-001',
                 'name' => 'Administrador Tema',
                 'email' => 'admin@tema.com.pe',
+                'password_hash' => Hash::make('Tema1234'),
+                'password_changed_at' => now(),
                 'role' => 'admin',
                 'active' => true,
                 'two_factor_enabled' => true,
@@ -345,6 +344,8 @@ class AppSettingsService
                 'id' => 'usr-ops-001',
                 'name' => 'Operaciones Tema',
                 'email' => 'operaciones@tema.com.pe',
+                'password_hash' => Hash::make('Tema1234'),
+                'password_changed_at' => now(),
                 'role' => 'operaciones',
                 'active' => true,
                 'two_factor_enabled' => true,
@@ -353,11 +354,31 @@ class AppSettingsService
                 'id' => 'usr-audit-001',
                 'name' => 'Auditoría Tema',
                 'email' => 'seguridad@tema.es',
+                'password_hash' => Hash::make('Tema1234'),
+                'password_changed_at' => now(),
                 'role' => 'auditoria',
                 'active' => true,
                 'two_factor_enabled' => true,
             ],
         ];
+    }
+
+    protected function synchronizeDefaultAdminUsers(): void
+    {
+        foreach ($this->defaultAdminUsers() as $user) {
+            $existing = AdminUser::query()->where('email', $user['email'])->first();
+
+            if (! $existing) {
+                AdminUser::query()->create($user);
+                continue;
+            }
+
+            if (! filled($existing->password_hash)) {
+                $existing->password_hash = $user['password_hash'];
+                $existing->password_changed_at = $user['password_changed_at'];
+                $existing->save();
+            }
+        }
     }
 
     protected function legacySettingsFilePath(): string
