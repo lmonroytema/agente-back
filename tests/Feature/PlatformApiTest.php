@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Mail\TwoFactorCodeMail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class PlatformApiTest extends TestCase
@@ -61,6 +63,8 @@ class PlatformApiTest extends TestCase
 
     public function test_login_and_two_factor_flow_uses_seeded_admin_users(): void
     {
+        Mail::fake();
+
         $login = $this->postJson('/api/auth/login', [
             'email' => 'admin@tema.com.pe',
             'password' => 'Tema1234',
@@ -76,9 +80,17 @@ class PlatformApiTest extends TestCase
         $challengeId = $login->json('challenge_id');
         $this->assertNotEmpty($challengeId);
 
+        $sentCode = null;
+        Mail::assertSent(TwoFactorCodeMail::class, function (TwoFactorCodeMail $mail) use (&$sentCode) {
+            $sentCode = $mail->code;
+
+            return $mail->hasTo('admin@tema.com.pe');
+        });
+        $this->assertNotEmpty($sentCode);
+
         $this->postJson('/api/auth/verify-2fa', [
             'challenge_id' => $challengeId,
-            'code' => '246810',
+            'code' => $sentCode,
         ])->assertOk()->assertJson([
             'success' => true,
             'requires_two_factor' => false,

@@ -17,6 +17,7 @@ Route::get('/capabilities', CapabilityController::class);
 Route::prefix('/auth')->group(function () {
     Route::get('/policy', [AuthController::class, 'policy']);
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/resend-2fa', [AuthController::class, 'resendTwoFactor']);
     Route::post('/verify-2fa', [AuthController::class, 'verifyTwoFactor']);
 });
 

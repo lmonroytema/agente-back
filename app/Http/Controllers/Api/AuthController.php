@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminUser;
-use App\Models\TwoFactorChallenge;
 use App\Services\AppSettingsService;
+use App\Services\TwoFactorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class AuthController extends Controller
 {
@@ -30,7 +30,7 @@ class AuthController extends Controller
         ]);
     }
 
-    public function login(Request $request, AppSettingsService $appSettings): JsonResponse
+    public function login(Request $request, AppSettingsService $appSettings, TwoFactorService $twoFactor): JsonResponse
     {
         $settings = $appSettings->toPayload($appSettings->ensureDefaults());
         $email = Str::lower(trim((string) $request->input('email', '')));
@@ -60,26 +60,23 @@ class AuthController extends Controller
         $userName = filled($user->name) ? $user->name : $this->buildUserName($email);
 
         if ($settings['require_two_factor'] && $user->two_factor_enabled) {
-            $challengeId = (string) Str::uuid();
-            TwoFactorChallenge::query()->where('email', $email)->delete();
-            TwoFactorChallenge::query()->create([
-                'challenge_id' => $challengeId,
-                'email' => $email,
-                'code' => '246810',
-                'is_admin' => $user->role === 'admin',
-                'user_name' => $userName,
-                'expires_at' => Carbon::now()->addMinutes(10),
-            ]);
+            try {
+                $challenge = $twoFactor->issueChallenge($user, $userName);
+            } catch (RuntimeException $exception) {
+                $status = str_contains($exception->getMessage(), 'Espera ') ? 429 : 502;
+
+                return response()->json(['detail' => $exception->getMessage()], $status);
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Credenciales validadas. Ingresa el código de doble autenticación.',
+                'message' => 'Credenciales validadas. Hemos enviado un codigo de doble autenticacion a tu correo corporativo.',
                 'email' => $email,
                 'domain' => Str::after($email, '@'),
                 'user_name' => $userName,
                 'is_admin' => $user->role === 'admin',
                 'requires_two_factor' => true,
-                'challenge_id' => $challengeId,
+                'challenge_id' => $challenge->challenge_id,
                 'masked_destination' => $this->maskEmail($email),
             ]);
         }
@@ -96,19 +93,59 @@ class AuthController extends Controller
         ]);
     }
 
-    public function verifyTwoFactor(Request $request): JsonResponse
+    public function resendTwoFactor(Request $request, AppSettingsService $appSettings, TwoFactorService $twoFactor): JsonResponse
     {
+        $settings = $appSettings->toPayload($appSettings->ensureDefaults());
         $challengeId = trim((string) $request->input('challenge_id', ''));
-        $code = trim((string) $request->input('code', ''));
 
-        $challenge = TwoFactorChallenge::query()->where('challenge_id', $challengeId)->first();
-        if (! $challenge || ($challenge->expires_at && $challenge->expires_at->isPast())) {
+        $challenge = \App\Models\TwoFactorChallenge::query()->where('challenge_id', $challengeId)->first();
+        if (! $challenge) {
             return response()->json(['detail' => 'El desafío de doble autenticación ya no es válido.'], 404);
         }
 
-        if ($code !== $challenge->code) {
-            return response()->json(['detail' => 'El código de doble autenticación es incorrecto.'], 401);
+        $user = AdminUser::query()->where('email', $challenge->email)->first();
+        if (! $user || ! $user->active || ! $settings['require_two_factor'] || ! $user->two_factor_enabled) {
+            $challenge->delete();
+
+            return response()->json(['detail' => 'La doble autenticación ya no está habilitada para este usuario.'], 422);
         }
+
+        try {
+            $newChallenge = $twoFactor->issueChallenge($user, $challenge->user_name ?: $user->name);
+        } catch (RuntimeException $exception) {
+            $status = str_contains($exception->getMessage(), 'Espera ') ? 429 : 502;
+
+            return response()->json(['detail' => $exception->getMessage()], $status);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Se envio un nuevo codigo de doble autenticacion al correo corporativo.',
+            'challenge_id' => $newChallenge->challenge_id,
+            'masked_destination' => $this->maskEmail($challenge->email),
+        ]);
+    }
+
+    public function verifyTwoFactor(Request $request, TwoFactorService $twoFactor): JsonResponse
+    {
+        $challengeId = trim((string) $request->input('challenge_id', ''));
+        $code = trim((string) $request->input('code', ''));
+        $verification = $twoFactor->verifyChallenge($challengeId, $code);
+
+        if ($verification['status'] === 'expired') {
+            return response()->json(['detail' => 'El desafío de doble autenticación ya no es válido o expiró.'], 404);
+        }
+
+        if ($verification['status'] === 'locked') {
+            return response()->json(['detail' => 'El codigo excedio el maximo de intentos permitidos. Solicita uno nuevo.'], 423);
+        }
+
+        if ($verification['status'] === 'invalid') {
+            return response()->json(['detail' => 'El codigo de doble autenticacion es incorrecto.'], 401);
+        }
+
+        /** @var \App\Models\TwoFactorChallenge $challenge */
+        $challenge = $verification['challenge'];
 
         $email = $challenge->email;
         $payload = [

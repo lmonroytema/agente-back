@@ -12,11 +12,17 @@ class TwoFactorChallenge extends Model
         'code',
         'is_admin',
         'user_name',
+        'attempts',
+        'max_attempts',
+        'sent_at',
         'expires_at',
     ];
 
     protected $casts = [
         'is_admin' => 'boolean',
+        'attempts' => 'integer',
+        'max_attempts' => 'integer',
+        'sent_at' => 'datetime',
         'expires_at' => 'datetime',
     ];
 }
