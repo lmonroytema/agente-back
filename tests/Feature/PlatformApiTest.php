@@ -99,6 +99,8 @@ class PlatformApiTest extends TestCase
             'name' => 'Analista QA',
             'email' => 'qa@tema.com.pe',
             'role' => 'analista',
+            'active' => true,
+            'two_factor_enabled' => true,
         ])->assertOk();
 
         $created->assertJson([
@@ -111,15 +113,54 @@ class PlatformApiTest extends TestCase
         $userId = $created->json('id');
 
         $this->patchJson("/api/admin/users/{$userId}", [
+            'name' => 'Auditor QA',
+            'email' => 'auditor.qa@tema.com.pe',
             'active' => false,
             'two_factor_enabled' => false,
             'role' => 'auditoria',
         ])->assertOk()->assertJson([
             'id' => $userId,
+            'name' => 'Auditor QA',
+            'email' => 'auditor.qa@tema.com.pe',
             'active' => false,
             'two_factor_enabled' => false,
             'role' => 'auditoria',
         ]);
+
+        $this->deleteJson("/api/admin/users/{$userId}")
+            ->assertOk()
+            ->assertJson(['success' => true]);
+
+        $this->patchJson('/api/admin/users/1f2b31ec-a437-4f4c-aaaf-f7f8f40f7fff', [
+            'name' => 'Sin efecto',
+            'email' => 'sin-efecto@tema.com.pe',
+            'role' => 'admin',
+            'active' => false,
+            'two_factor_enabled' => false,
+        ])->assertNotFound();
+
+        $admins = \App\Models\AdminUser::query()->where('role', 'admin')->get();
+        $this->assertGreaterThanOrEqual(1, $admins->count());
+        $primaryAdmin = $admins->first();
+        $secondaryAdmin = $admins->skip(1)->first();
+
+        if ($secondaryAdmin) {
+            $this->patchJson("/api/admin/users/{$secondaryAdmin->id}", [
+                'name' => $secondaryAdmin->name,
+                'email' => $secondaryAdmin->email,
+                'role' => 'auditoria',
+                'active' => false,
+                'two_factor_enabled' => false,
+            ])->assertOk();
+        }
+
+        $this->patchJson("/api/admin/users/{$primaryAdmin->id}", [
+            'name' => $primaryAdmin->name,
+            'email' => $primaryAdmin->email,
+            'role' => 'operaciones',
+            'active' => false,
+            'two_factor_enabled' => false,
+        ])->assertStatus(422);
 
         $settings = $this->getJson('/api/admin/app-settings')
             ->assertOk()

@@ -24,6 +24,7 @@ Route::prefix('/admin')->group(function () {
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::post('/users', [AdminUserController::class, 'store']);
     Route::patch('/users/{userId}', [AdminUserController::class, 'update']);
+    Route::delete('/users/{userId}', [AdminUserController::class, 'destroy']);
 
     Route::get('/app-settings', [AppSettingsController::class, 'show']);
     Route::patch('/app-settings', [AppSettingsController::class, 'update']);
