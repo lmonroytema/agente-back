@@ -24,7 +24,7 @@ class AdminUserController extends Controller
     public function store(Request $request, AppSettingsService $appSettings): JsonResponse
     {
         $settings = $appSettings->toPayload($appSettings->ensureDefaults());
-        $payload = $this->validatedPayload($request, $settings);
+        $payload = $this->validatedCreatePayload($request, $settings);
         $email = $payload['email'];
 
         if ($settings['require_corporate_email'] && ! in_array(Str::after($email, '@'), $settings['allowed_domains'], true)) {
@@ -51,7 +51,7 @@ class AdminUserController extends Controller
             return response()->json(['detail' => 'Usuario no encontrado.'], 404);
         }
 
-        $payload = $this->validatedPayload($request, $settings, $user);
+        $payload = $this->validatedUpdatePayload($request, $settings, $user);
 
         if ($settings['require_corporate_email'] && ! in_array(Str::after($payload['email'], '@'), $settings['allowed_domains'], true)) {
             return response()->json(['detail' => 'Solo se permiten usuarios con correo corporativo.'], 403);
@@ -104,7 +104,7 @@ class AdminUserController extends Controller
         return response()->json(['success' => true]);
     }
 
-    protected function validatedPayload(Request $request, array $settings, ?AdminUser $user = null): array
+    protected function validatedCreatePayload(Request $request, array $settings): array
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -112,7 +112,7 @@ class AdminUserController extends Controller
                 'required',
                 'email',
                 'max:190',
-                Rule::unique('admin_users', 'email')->ignore($user?->id),
+                Rule::unique('admin_users', 'email'),
             ],
             'role' => ['required', Rule::in(['analista', 'operaciones', 'auditoria', 'admin'])],
             'active' => ['sometimes', 'boolean'],
@@ -123,10 +123,47 @@ class AdminUserController extends Controller
             'name' => trim((string) $validated['name']),
             'email' => Str::lower(trim((string) $validated['email'])),
             'role' => Str::lower(trim((string) $validated['role'])),
-            'active' => array_key_exists('active', $validated) ? (bool) $validated['active'] : (bool) ($user?->active ?? true),
+            'active' => array_key_exists('active', $validated) ? (bool) $validated['active'] : true,
             'two_factor_enabled' => array_key_exists('two_factor_enabled', $validated)
                 ? (bool) $validated['two_factor_enabled']
-                : (bool) ($user?->two_factor_enabled ?? ($settings['require_two_factor'] ?? true)),
+                : (bool) ($settings['require_two_factor'] ?? true),
+        ];
+    }
+
+    protected function validatedUpdatePayload(Request $request, array $settings, AdminUser $user): array
+    {
+        $validated = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:120'],
+            'email' => [
+                'sometimes',
+                'required',
+                'email',
+                'max:190',
+                Rule::unique('admin_users', 'email')->ignore($user->id),
+            ],
+            'role' => ['sometimes', 'required', Rule::in(['analista', 'operaciones', 'auditoria', 'admin'])],
+            'active' => ['sometimes', 'boolean'],
+            'two_factor_enabled' => ['sometimes', 'boolean'],
+        ]);
+
+        if (empty($validated)) {
+            return [
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'active' => (bool) $user->active,
+                'two_factor_enabled' => (bool) $user->two_factor_enabled,
+            ];
+        }
+
+        return [
+            'name' => array_key_exists('name', $validated) ? trim((string) $validated['name']) : $user->name,
+            'email' => array_key_exists('email', $validated) ? Str::lower(trim((string) $validated['email'])) : $user->email,
+            'role' => array_key_exists('role', $validated) ? Str::lower(trim((string) $validated['role'])) : $user->role,
+            'active' => array_key_exists('active', $validated) ? (bool) $validated['active'] : (bool) $user->active,
+            'two_factor_enabled' => array_key_exists('two_factor_enabled', $validated)
+                ? (bool) $validated['two_factor_enabled']
+                : (bool) $user->two_factor_enabled,
         ];
     }
 
